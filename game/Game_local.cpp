@@ -3472,6 +3472,10 @@ idGameLocal::RunFrame
 
 	player = GetLocalPlayer();
 
+	if ( player ) {
+		player->UpdateEffects();
+	}
+
 	if ( !isMultiplayer && g_stopTime.GetBool() ) {
 
 		// set the user commands for this frame

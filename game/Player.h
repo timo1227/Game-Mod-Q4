@@ -280,6 +280,21 @@ public:
  		EVENT_MAXEVENTS
  	};
 
+	// Enum for different types of status effects
+	enum class EffectType {
+		HeavyBleed,
+		LightBleed,
+		Fracture,
+		BrokenLimb,
+		Pain
+	};
+
+	enum class FracturedPart {
+		None,
+		Leg,
+		Arm
+	};
+
 	friend class idThread;
 
 	usercmd_t				usercmd;
@@ -349,6 +364,7 @@ public:
 	bool					showNewObjectives;
 
 	int						lastDmgTime;
+	int						lastBleedTime;
 	int						deathClearContentsTime;
  	bool					doingDeathSkin;
 	int						nextHealthPulse;	// time when health will tick down
@@ -485,6 +501,7 @@ public:
 	void					CalcDamagePoints(  idEntity *inflictor, idEntity *attacker, const idDict *damageDef,
 							   const float damageScale, const int location, int *health, int *armor );
 	virtual	void			Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &dir, const char *damageDefName, const float damageScale, const int location );
+	virtual void			UpdateEffects( void );
 	virtual bool			CanPlayImpactEffect ( idEntity* attacker, idEntity* target );
 	virtual void			AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName, idEntity* inflictor );
 	virtual void			ProjectHeadOverlay( const idVec3 &point, const idVec3 &dir, float size, const char *decal );
@@ -1153,6 +1170,73 @@ private:
 	stateResult_t			State_Legs_Fall					( const stateParms_t& parms );
 	stateResult_t			State_Legs_Land					( const stateParms_t& parms );
 	stateResult_t			State_Legs_Dead					( const stateParms_t& parms );
+	
+	private: 
+		class StatusEffect {
+		public:
+			float duration;          // How long this status effect lasts
+			float endTime;			 // End time of the effect
+			int lastApplyTime;       // Last time an effect was applied
+
+			virtual void ApplyEffect(idPlayer* player) = 0; // Pure virtual function to apply specific effect
+			virtual EffectType GetType() const = 0;         // Returns the effect type
+		};
+
+		class BleedEffect : public StatusEffect {
+		public:
+			bool isHeavyBleed;       // Differentiates between heavy and light bleed
+			float damageAccumulator; // Accumulates damage
+
+			virtual void ApplyEffect(idPlayer* player) override;  // Specific implementation for bleed effect
+			virtual EffectType GetType() const override {
+				return isHeavyBleed ? EffectType::HeavyBleed : EffectType::LightBleed;
+			}
+		};
+
+		class FractureEffect : public StatusEffect {
+		private:
+			FracturedPart fracturedPart;
+
+		public:
+			FractureEffect(FracturedPart part) : fracturedPart(part) {}
+
+			virtual void ApplyEffect(idPlayer* player) override;
+
+			virtual void EndEffect(idPlayer* player);
+
+			FracturedPart GetFracturedPart() const {
+				return fracturedPart;
+			}
+
+			virtual EffectType GetType() const override {
+				return EffectType::Fracture;
+			}
+		};
+
+		class EffectsManager {
+		private:
+			idPlayer* owner;  // Pointer to the enclosing idPlayer instance
+			idList<StatusEffect*> activeEffects; // Store pointers to active effects
+
+		public:
+			EffectsManager(idPlayer* ownerPtr) : owner(ownerPtr) {}  // Constructor to set the owner
+			void AddEffect(StatusEffect* effect);
+			void RemoveEffect(EffectType type);
+
+			StatusEffect* idPlayer::EffectsManager::GetStatusEffect(EffectType type) {
+				for (int i = 0; i < activeEffects.Num(); ++i) {
+					if (activeEffects[i]->GetType() == type) {
+						return activeEffects[i];
+					}
+				}
+				return nullptr;  // Return null if the effect is not found
+			};
+
+			bool HasStatusEffect(EffectType type);
+			void UpdateEffects();									 // Calls ApplyEffect() for each active effect
+		};
+
+		EffectsManager effectsManager;
 	
  	CLASS_STATES_PROTOTYPE( idPlayer );
 };

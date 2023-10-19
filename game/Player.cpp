@@ -65,7 +65,8 @@ const float	PLAYER_ITEM_DROP_SPEED	= 100.0f;
 // how many units to raise spectator above default view height so it's in the head of someone
 const int SPECTATE_RAISE = 25;
 
-const int	HEALTH_PULSE		= 1000;			// Regen rate and heal leak rate (for health > 100)
+//0 HEALTH_PULSE No Health Regen on its own 
+const int	HEALTH_PULSE		= 0;			// Regen rate and heal leak rate (for health > 100)
 const int	ARMOR_PULSE			= 1000;			// armor ticking down due to being higher than maxarmor
 const int	AMMO_REGEN_PULSE	= 1000;			// ammo regen in Arena CTF
 const int	POWERUP_BLINKS		= 5;			// Number of times the powerup wear off sound plays
@@ -1076,7 +1077,7 @@ bool idInventory::UseAmmo( int index, int amount ) {
 idPlayer::idPlayer
 ==============
 */
-idPlayer::idPlayer() {
+idPlayer::idPlayer() : effectsManager(this) {
 	memset( &usercmd, 0, sizeof( usercmd ) );
 
 	alreadyDidTeamAnnouncerSound = false;
@@ -1119,6 +1120,7 @@ idPlayer::idPlayer() {
 	overlayHudTime			= 0;
 
 	lastDmgTime				= 0;
+	lastBleedTime			= 0;
 	deathClearContentsTime	= 0;
 	nextHealthPulse			= 0;
 
@@ -1298,6 +1300,7 @@ idPlayer::idPlayer() {
 	reloadModel = false;
 	modelDecl = NULL;
 
+	//No hud for modded Version for Immersive Feeling
 	disableHud = false;
 
 	mutedPlayers = 0;
@@ -1343,6 +1346,7 @@ idPlayer::idPlayer() {
 	teamDoubler			= NULL;		
 	teamDoublerPending		= false;
 }
+
 
 /*
 ==============
@@ -8735,30 +8739,48 @@ void idPlayer::EvaluateControls( void ) {
 idPlayer::AdjustSpeed
 ==============
 */
-void idPlayer::AdjustSpeed( void ) {
+void idPlayer::AdjustSpeed(void) {
 	float speed;
 
-	if ( spectating ) {
+	bool isLegFractured = false;
+
+	if (effectsManager.HasStatusEffect(EffectType::Fracture)) {
+		FractureEffect* fracture = dynamic_cast<FractureEffect*>(effectsManager.GetStatusEffect(EffectType::Fracture));
+		if (fracture && fracture->GetFracturedPart() == FracturedPart::Leg) {
+			isLegFractured = true;
+		}
+	}
+
+	if (spectating) {
 		speed = pm_spectatespeed.GetFloat();
 		bobFrac = 0.0f;
-	} else if ( noclip ) {
+	}
+	else if (noclip) {
 		speed = pm_noclipspeed.GetFloat();
 		bobFrac = 0.0f;
- 	} else if ( !physicsObj.OnLadder() && ( usercmd.buttons & BUTTON_RUN ) && ( usercmd.forwardmove || usercmd.rightmove ) && ( usercmd.upmove >= 0 ) ) {
+	}
+	else if (!physicsObj.OnLadder() && (usercmd.buttons & BUTTON_RUN) && (usercmd.forwardmove || usercmd.rightmove) && (usercmd.upmove >= 0)) {
 		bobFrac = 1.0f;
 		speed = pm_speed.GetFloat();
-	} else {
+		if (isLegFractured) {
+			speed *= 0.5f;  // Half the running speed if leg is fractured
+		}
+	}
+	else {
 		speed = pm_walkspeed.GetFloat();
+		if (isLegFractured) {
+			speed *= 0.5f;  // Half the walking speed if leg is fractured
+		}
 		bobFrac = 0.0f;
 	}
 
 	speed *= PowerUpModifier(PMOD_SPEED);
 
-	if ( influenceActive == INFLUENCE_LEVEL3 ) {
+	if (influenceActive == INFLUENCE_LEVEL3) {
 		speed *= 0.33f;
 	}
 
-	physicsObj.SetSpeed( speed, pm_crouchspeed.GetFloat() );
+	physicsObj.SetSpeed(speed, pm_crouchspeed.GetFloat());
 }
 
 /*
@@ -9662,17 +9684,24 @@ void idPlayer::RouteGuiMouse( idUserInterface *gui ) {
 	}
 }
 
-bool idPlayer::CanZoom( void  )
-{
-	if ( vehicleController.IsDriving() ) {
-		rvVehicle * vehicle				= vehicleController.GetVehicle();
-		rvVehiclePosition * position	= vehicle ? vehicle->GetPosition( vehicleController.GetPosition() ) : 0;
-		rvVehicleWeapon * weapon		= position ? position->GetActiveWeapon() : 0;
-
-		return weapon && weapon->CanZoom();
+bool idPlayer::CanZoom(void) {
+	// Check if the player has a fractured arm
+	if (effectsManager.HasStatusEffect(EffectType::Fracture)) {
+		FractureEffect* fracture = dynamic_cast<FractureEffect*>(effectsManager.GetStatusEffect(EffectType::Fracture));
+		if (fracture && fracture->GetFracturedPart() == FracturedPart::Arm) {
+			return false;  // Can't zoom if arm is fractured
+		}
 	}
 
-	return weapon && weapon->CanZoom() && !weapon->IsReloading ( );
+    if (vehicleController.IsDriving()) {
+        rvVehicle* vehicle = vehicleController.GetVehicle();
+        rvVehiclePosition* position = vehicle ? vehicle->GetPosition(vehicleController.GetPosition()) : 0;
+        rvVehicleWeapon* weapon = position ? position->GetActiveWeapon() : 0;
+
+        return weapon && weapon->CanZoom();
+    }
+
+    return weapon && weapon->CanZoom() && !weapon->IsReloading();
 }
 
 /*
@@ -10262,6 +10291,36 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 			damage = 1;
 		}
 
+		// BleedEffect
+		float bleedChance = 0.25f;
+		if (gameLocal.random.RandomFloat() < bleedChance) {
+			BleedEffect* newBleed = new BleedEffect();																	// Dynamically allocate a new BleedEffect instance.
+
+			newBleed->isHeavyBleed = (gameLocal.random.RandomFloat() < 0.5f);											// 50% chance of heavy bleed.
+			int durationInMilliseconds = newBleed->isHeavyBleed ? 60000 : 30000;										// Convert duration to milliseconds: 60,000 for heavy bleed and 30,000 for light bleed.
+			newBleed->duration = newBleed->isHeavyBleed ? 60.0f : 30.0f;												// Start with no accumulated damage.
+			newBleed->damageAccumulator = 0.0f;																			// Start with no accumulated damage.
+			newBleed->endTime = gameLocal.time + durationInMilliseconds;												// Set the absolute end time for this effect.
+			newBleed->lastApplyTime = gameLocal.time;																	// Set the last bleed apply time to the current time.
+
+			effectsManager.AddEffect( newBleed );																		// Add the new bleed effect to the effects manager.
+		}
+
+		// FractureEffect
+		float fractureChance = 0.15f; // For example, a 15% chance to get a fracture.
+		if (gameLocal.random.RandomFloat() < fractureChance) {
+			FracturedPart part = (gameLocal.random.RandomFloat() < 0.5f) ? FracturedPart::Leg : FracturedPart::Arm;		// 50% chance of leg fracture or arm fracture.
+
+			FractureEffect* newFracture = new FractureEffect( part );													// Dynamically allocate a new FractureEffect instance.
+
+			int durationInMilliseconds = (part == FracturedPart::Leg) ? 90000 : 45000;									// For example, 90,000 ms for leg fracture and 45,000 ms for arm fracture.
+			newFracture->duration = (part == FracturedPart::Leg) ? 90.0f : 45.0f;										// Set the duration based on the fractured part.
+			newFracture->endTime = gameLocal.time + durationInMilliseconds;												// Set the absolute end time for this effect.
+			newFracture->lastApplyTime = gameLocal.time;																// Set the last effect apply time to the current time.
+
+			effectsManager.AddEffect( newFracture );																	// Add the new fracture effect to the effects manager.
+		}
+
 		int oldHealth = health;
 		health -= damage;
 
@@ -10322,6 +10381,138 @@ void idPlayer::Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &di
 	lastDamageDef = damageDef->Index();
 	lastDamageLocation = location;
 }
+
+/*
+=====================
+idPlayer::UpdateEffects
+=====================
+*/
+void idPlayer::UpdateEffects() {
+	effectsManager.UpdateEffects();
+}
+
+/*
+=====================
+idPlayer::EffectsManager::AddEffect
+=====================
+*/
+void idPlayer::EffectsManager::AddEffect(StatusEffect* effect) {
+	activeEffects.Append(effect);
+}
+
+/*
+=====================
+idPlayer::EffectsManager::UpdateEffects
+=====================
+*/
+void idPlayer::EffectsManager::UpdateEffects() {
+	int currentTime = gameLocal.time;
+
+	for (int i = 0; i < activeEffects.Num(); ++i) {
+		StatusEffect* effect = activeEffects[i];
+
+		float elapsedTime = (currentTime - effect->lastApplyTime) * 0.001f;  // Convert elapsed time to seconds.
+
+		// Check if the effect has ended
+		if (currentTime >= effect->endTime) {
+			RemoveEffect(effect->GetType());
+			--i;  // adjust index due to removal
+			continue;  // skip further processing for this effect
+		}
+
+		// If it's time to apply this effect
+		if (currentTime - effect->lastApplyTime >= 2000) {
+			effect->ApplyEffect(owner);  // Apply effect to the player
+			effect->lastApplyTime = currentTime;  // Update the last application time
+		}
+	}
+}
+
+/*
+=====================
+idPlayer::EffectsManager::RemoveEffect
+=====================
+*/
+void idPlayer::EffectsManager::RemoveEffect(EffectType type) {
+	for (int i = 0; i < activeEffects.Num(); ++i) {
+		if (activeEffects[i]->GetType() == type) {
+			delete activeEffects[i];  // Free the memory allocated for this effect
+			activeEffects.RemoveIndex(i);
+			--i;  // Adjust the index because of the removal
+			break;
+		}
+	}
+}
+
+/*
+=====================
+idPlayer::EffectsManager::HasStatusEffect
+=====================
+*/
+bool idPlayer::EffectsManager::HasStatusEffect(EffectType type) {
+	return GetStatusEffect(type) != nullptr;
+}
+
+
+/*
+=====================
+idPlayer::BleedEffect::ApplyEffect
+=====================
+*/
+void idPlayer::BleedEffect::ApplyEffect(idPlayer* player) {
+	if (player->health > 5) {
+		float bleedRate = isHeavyBleed ? 2.0f : 1.0f;
+		damageAccumulator += bleedRate;
+		int damage = static_cast<int>(damageAccumulator);
+
+		if (damage >= 1) {
+			// Ensure player's health does not fall below 5 due to a bleed effect
+			if (player->health - damage < 5) {
+				damage = player->health - 5;
+			}
+			player->health -= damage;
+			damageAccumulator -= damage;  // subtract the integer part
+
+			// Log damage taken
+			GAMELOG_ADD(va("player%d_damage_taken", player->entityNumber), damage);
+		}
+	}
+
+}
+
+/*
+=====================
+idPlayer::FractureEffect::ApplyEffect
+=====================
+*/
+void idPlayer::FractureEffect::ApplyEffect(idPlayer* player) {
+	// Check if the player has a fracture
+	if (fracturedPart == FracturedPart::Leg || fracturedPart == FracturedPart::Arm) {
+
+		// Call pain function. For this, you might need to gather additional details 
+		// like the inflictor, attacker, damage value, direction, and location.
+		// These are just placeholder values and could be replaced
+
+		idEntity* inflictor = NULL;		
+		idEntity* attacker = NULL;		
+		int damage = 10;				
+		const idVec3 dir(1.0f, 1.0f, 1.0f);	
+		int location = 0;				
+
+		player->Pain(inflictor, attacker, damage, dir, location);
+		player->AdjustSpeed();
+	}
+}
+
+/*
+=====================
+idPlayer::FractureEffect::EndEffect
+=====================
+*/
+void idPlayer::FractureEffect::EndEffect(idPlayer* player) {
+	player->AdjustSpeed();
+}
+
 
 /*
 =====================
