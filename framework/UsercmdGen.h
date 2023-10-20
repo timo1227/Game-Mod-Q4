@@ -75,6 +75,7 @@ const int IMPULSE_40			= 40;			// repeast last radio chatter
 // RAVEN BEGIN
 // bdube: added flashlight
 const int IMPULSE_50			= 50;			// activate flashlight
+const int IMPULSE_53			= 53;			// activate suppressor
 const int IMPULSE_51			= 51;			// switch to last weapon
 // ddynerman: mp stats
 const int IMPULSE_52			= 52;			// mp statistics

@@ -8609,6 +8609,11 @@ void idPlayer::PerformImpulse( int impulse ) {
 			break;
 		}
 
+		case IMPULSE_53: {
+			ToggleSuppressor();
+			break;
+		}
+
  		case IMPULSE_51: {
  			LastWeapon();
  			break;
@@ -13208,11 +13213,67 @@ void idPlayer::ToggleFlashlight ( void ) {
 
 /*
 ================
+idPlayer::ToggleSuppressor
+================
+*/
+void idPlayer::ToggleSuppressor(void) {
+	// Dead players can't use suppressors
+	if (health <= 0 || !weaponEnabled) {
+		return;
+	}
+
+	int suppressorWeapon = currentWeapon;
+	if (!spawnArgs.GetBool(va("weapon%d_suppressor", suppressorWeapon))) {
+		// TODO: find the first suppressor weapon that has ammo starting at the bottom
+		for (suppressorWeapon = MAX_WEAPONS - 1; suppressorWeapon >= 0; suppressorWeapon--) {
+			if (inventory.weapons & (1 << suppressorWeapon)) {
+				const char* weap = spawnArgs.GetString(va("def_weapon%d", suppressorWeapon));
+				int			ammo = inventory.ammo[inventory.AmmoIndexForWeaponClass(weap)];
+
+				if (!ammo) {
+					continue;
+				}
+
+				if (spawnArgs.GetBool(va("weapon%d_suppressor", suppressorWeapon))) {
+					break;
+				}
+			}
+		}
+
+		// Couldn't find a weapon with a suppressor
+		if (suppressorWeapon < 0) {
+			return;
+		}
+	}
+
+	// If the current weapon isn't the suppressor then always force the suppressor on
+	if (suppressorWeapon != idealWeapon) {
+		suppressorOn = true;
+		idealWeapon = suppressorWeapon;
+		// Inform the weapon to toggle the suppressor, this will eventually cause the player's
+		// Suppressor method to be called 
+	}
+	else if (weapon) {
+		weapon->Suppressor( );
+	}
+}
+
+/*
+================
 idPlayer::Flashlight
 ================
 */
 void idPlayer::Flashlight ( bool on ) {
 	flashlightOn = on;	
+}
+
+/*
+================
+idPlayer::Suppressor
+================
+*/
+void idPlayer::Suppressor ( bool on ) {
+	suppressorOn = on;
 }
 
 /*

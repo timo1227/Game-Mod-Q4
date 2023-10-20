@@ -627,7 +627,9 @@ public:
  	void					WeaponRisingCallback		( void );
 	void					RemoveWeapon				( const char *weap );
 	void					Flashlight					( bool on );
+	void					Suppressor					( bool on );
 	void					ToggleFlashlight			( void );
+	void					ToggleSuppressor			( void );
  	bool					CanShowWeaponViewmodel		( void ) const;
 
 	virtual bool			HandleSingleGuiCommand( idEntity *entityGui, idLexer *src );
@@ -696,6 +698,7 @@ public:
  	bool					IsInTeleport	( void );
 	bool					IsZoomed		( void );
 	bool					IsFlashlightOn	( void );
+	bool					IsSuppressorOn	( void );
 	virtual bool			IsCrouching		( void ) const;
 	
 	// voice com muting
@@ -877,6 +880,7 @@ private:
 // RAVEN END
 
 	bool					flashlightOn;
+	bool					suppressorOn;
 	bool					zoomed;
 
 	bool					reloadModel;
@@ -1303,6 +1307,10 @@ ID_INLINE bool idPlayer::IsZoomed( void ) {
 
 ID_INLINE bool idPlayer::IsFlashlightOn( void ) {
 	return flashlightOn;
+}
+
+ID_INLINE bool idPlayer::IsSuppressorOn( void ) {
+	return suppressorOn;
 }
 
 ID_INLINE rvViewWeapon* idPlayer::GetWeaponViewModel( void ) const {
