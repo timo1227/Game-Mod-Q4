@@ -1572,6 +1572,7 @@ void idPlayer::Init( void ) {
 	previousWeapon = -1;
 	
 	flashlightOn	  = false;
+	suppressorOn	  = false;
 
 	idealLegsYaw = 0.0f;
 	legsYaw = 0.0f;
