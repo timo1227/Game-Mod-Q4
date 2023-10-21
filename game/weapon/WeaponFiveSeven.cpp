@@ -22,8 +22,18 @@ public:
 protected:
 
 	bool				fireHeld;
+
 	bool				UpdateFlashlight	( void );
 	void				Flashlight			( bool on );
+
+	bool				UpdateSuppressor	( void );
+	void				Suppressor			( bool on );
+
+	bool				UpdateCompensator	( void );
+	void				Compensator			( bool on );
+
+	bool				UpdateBarrel		( void );
+	void				Barrel				( bool on );
 
 private:
 
@@ -33,6 +43,9 @@ private:
 	stateResult_t		State_Fire				( const stateParms_t& parms );
 	stateResult_t		State_Reload			( const stateParms_t& parms );
 	stateResult_t		State_Flashlight		( const stateParms_t& parms );
+	stateResult_t		State_Suppressor		( const stateParms_t& parms );
+	stateResult_t		State_Compensator		( const stateParms_t& parms );
+	stateResult_t		State_Barrel			( const stateParms_t& parms );
 	
 	CLASS_STATES_PROTOTYPE ( rvWeaponFiveSeven );
 };
@@ -81,6 +94,75 @@ void rvWeaponFiveSeven::Flashlight ( bool on ) {
 
 /*
 ================
+rvWeaponFiveSeven::UpdateSuppressor
+================
+*/
+bool rvWeaponFiveSeven::UpdateSuppressor(void) {
+	if (!wsfl.suppressor) {
+		return false;
+	}
+
+	SetState("Suppressor", 0);
+	return true;
+}
+
+/*
+================
+rvWeaponFiveSeven::Suppressor
+================
+*/
+void rvWeaponFiveSeven::Suppressor(bool on) {
+	owner->Suppressor(on);
+}
+
+/*
+================
+rvWeaponFiveSeven::UpdateCompensator
+================
+*/
+bool rvWeaponFiveSeven::UpdateCompensator(void) {
+	if (!wsfl.compensator) {
+		return false;
+	}
+
+	SetState("Compensator", 0);
+	return true;
+}
+
+/*
+================
+rvWeaponFiveSeven::Compensator
+================
+*/
+void rvWeaponFiveSeven::Compensator(bool on) {
+	owner->Compensator(on);
+}
+
+/*
+================
+rvWeaponFiveSeven::UpdateBarrel
+================
+*/
+bool rvWeaponFiveSeven::UpdateBarrel(void) {
+	if (!wsfl.barrel) {
+		return false;
+	}
+
+	SetState("Barrel", 0);
+	return true;
+}
+
+/*
+================
+rvWeaponFiveSeven::Barrel
+================
+*/
+void rvWeaponFiveSeven::Barrel(bool on) {
+	owner->Barrel(on);
+}
+
+/*
+================
 rvWeaponFiveSeven::Spawn
 ================
 */
@@ -90,6 +172,9 @@ void rvWeaponFiveSeven::Spawn ( void ) {
 	SetState ( "Raise", 0 );
 			
 	Flashlight ( owner->IsFlashlightOn() );
+	Suppressor ( owner->IsSuppressorOn() );
+	Compensator( owner->IsCompensatorOn());
+	Barrel	   ( owner->IsBarrelOn()     );
 }
 
 /*
@@ -149,6 +234,9 @@ CLASS_STATES_DECLARATION ( rvWeaponFiveSeven )
 	STATE ( "Fire",							rvWeaponFiveSeven::State_Fire )
 	STATE ( "Reload",						rvWeaponFiveSeven::State_Reload )
 	STATE ( "Flashlight",					rvWeaponFiveSeven::State_Flashlight )
+	STATE( "Suppressor",					rvWeaponFiveSeven::State_Suppressor)
+	STATE( "Compensator",					rvWeaponFiveSeven::State_Compensator)
+	STATE( "Barrel",						rvWeaponFiveSeven::State_Barrel)
 END_CLASS_STATES
 
 /*
@@ -245,6 +333,15 @@ stateResult_t rvWeaponFiveSeven::State_Idle ( const stateParms_t& parms ) {
 			if (UpdateFlashlight()) {
 				return SRESULT_DONE;
 			}
+			if (UpdateSuppressor()) {
+				return SRESULT_DONE;
+			}
+			if (UpdateCompensator()) {
+				return SRESULT_DONE;
+			}
+			if (UpdateBarrel()) {
+				return SRESULT_DONE;
+			}
 
 			if (fireHeld && !wsfl.attack) {
 				fireHeld = false;
@@ -308,7 +405,10 @@ stateResult_t rvWeaponFiveSeven::State_Fire ( const stateParms_t& parms ) {
 			Attack(false, 1, spread, 0, 1.0f);
 			PlayEffect("fx_normalflash", barrelJointView, false);
 			fireHeld = true;
-			PlayAnim(ANIMCHANNEL_ALL, "fire", parms.blendFrames);
+
+			if (!owner->IsSuppressorOn()) {
+				PlayAnim(ANIMCHANNEL_ALL, "fire", parms.blendFrames);
+			}
 			
 			return SRESULT_STAGE(FIRE_WAIT);
 		
@@ -318,6 +418,15 @@ stateResult_t rvWeaponFiveSeven::State_Fire ( const stateParms_t& parms ) {
 				return SRESULT_DONE;
 			}
 			if (UpdateFlashlight()) {
+				return SRESULT_DONE;
+			}
+			if (UpdateSuppressor()) {
+				return SRESULT_DONE;
+			}
+			if (UpdateCompensator()) {
+				return SRESULT_DONE;
+			}
+			if (UpdateBarrel()) {
 				return SRESULT_DONE;
 			}
 			return SRESULT_WAIT;
@@ -393,6 +502,113 @@ stateResult_t rvWeaponFiveSeven::State_Flashlight ( const stateParms_t& parms ) 
 			
 			SetState ( "Idle", 4 );
 			return SRESULT_DONE;
+	}
+	return SRESULT_ERROR;
+}
+
+/*
+================
+rvWeaponFiveSeven::State_Suppressor
+================
+*/
+stateResult_t rvWeaponFiveSeven::State_Suppressor(const stateParms_t& parms) {
+	enum {
+		SUPPRESSOR_INIT,
+		SUPPRESSOR_WAIT,
+	};
+	switch (parms.stage) {
+	case SUPPRESSOR_INIT:
+		SetStatus(WP_SUPPRESSOR);
+		// Wait for the suppressor anim to play		
+		PlayAnim(ANIMCHANNEL_ALL, "suppresor", 0);
+		return SRESULT_STAGE(SUPPRESSOR_WAIT);
+
+	case SUPPRESSOR_WAIT:
+		if (!AnimDone(ANIMCHANNEL_ALL, 4)) {
+			return SRESULT_WAIT;
+		}
+
+		if (owner->IsSuppressorOn()) {
+			Suppressor(false);
+		}
+		else {
+			Suppressor(true);
+		}
+
+		SetState("Idle", 4);
+		return SRESULT_DONE;
+	}
+	return SRESULT_ERROR;
+}
+
+/*
+================
+rvWeaponFiveSeven::State_Compensator
+================
+*/
+stateResult_t rvWeaponFiveSeven::State_Compensator(const stateParms_t& parms) {
+	enum {
+		COMPENSATOR_INIT,
+		COMPENSATOR_WAIT,
+	};
+
+	switch (parms.stage) {
+	case COMPENSATOR_INIT:
+		SetStatus(WP_COMPENSATOR);
+		// Wait for the compensator anim to play		
+		PlayAnim(ANIMCHANNEL_ALL, "compensator", 0);
+		return SRESULT_STAGE(COMPENSATOR_WAIT);
+
+	case COMPENSATOR_WAIT:
+		if (!AnimDone(ANIMCHANNEL_ALL, 4)) {
+			return SRESULT_WAIT;
+		}
+
+		if (owner->IsCompensatorOn()) {
+			Compensator(false);
+		}
+		else {
+			Compensator(true);
+		}
+
+		SetState("Idle", 4);
+		return SRESULT_DONE;
+	}
+	return SRESULT_ERROR;
+}
+
+/*
+================
+rvWeaponFiveSeven::State_Barrel
+================
+*/
+stateResult_t rvWeaponFiveSeven::State_Barrel(const stateParms_t& parms) {
+	enum {
+		BARREL_INIT,
+		BARREL_WAIT,
+	};
+
+	switch (parms.stage) {
+	case BARREL_INIT:
+		SetStatus(WP_BARREL);
+		// Wait for the barrel anim to play		
+		PlayAnim(ANIMCHANNEL_ALL, "barrel", 0);
+		return SRESULT_STAGE(BARREL_WAIT);
+
+	case BARREL_WAIT:
+		if (!AnimDone(ANIMCHANNEL_ALL, 4)) {
+			return SRESULT_WAIT;
+		}
+
+		if (owner->IsBarrelOn()) {
+			Barrel(false);
+		}
+		else {
+			Barrel(true);
+		}
+
+		SetState("Idle", 4);
+		return SRESULT_DONE;
 	}
 	return SRESULT_ERROR;
 }
