@@ -29,6 +29,9 @@ protected:
 	bool				UpdateSuppressor	( void );
 	void				Suppressor			( bool on );
 
+	bool				UpdateCompensator	( void );
+	void				Compensator			( bool on );
+
 private:
 
 	stateResult_t		State_Idle			( const stateParms_t& parms );
@@ -36,6 +39,7 @@ private:
 	stateResult_t		State_Reload		( const stateParms_t& parms );
 	stateResult_t		State_Flashlight	( const stateParms_t& parms );
 	stateResult_t		State_Suppressor	( const stateParms_t& parms );
+	stateResult_t		State_Compensator	( const stateParms_t& parms );
 
 	CLASS_STATES_PROTOTYPE ( rvWeaponM4A1 );
 };
@@ -63,7 +67,8 @@ void rvWeaponM4A1::Spawn ( void ) {
 	SetState ( "Raise", 0 );	
 	
 	Flashlight ( owner->IsFlashlightOn() );
-	Suppressor(owner->IsSuppressorOn());
+	Suppressor ( owner->IsSuppressorOn() );
+	Compensator( owner->IsCompensatorOn() );
 }
 
 /*
@@ -171,6 +176,29 @@ void rvWeaponM4A1::Suppressor(bool on) {
 }
 
 /*
+================
+rvWeaponM4A1::UpdateCompensator
+================
+*/
+bool rvWeaponM4A1::UpdateCompensator( void ) {
+	if (!wsfl.compensator) {
+		return false;
+	}
+
+	SetState ( "Compensator", 0 );
+	return true;
+}
+
+/*
+================
+rvWeaponM4A1::Compensator
+================
+*/
+void rvWeaponM4A1::Compensator( bool on ) {
+	owner->Compensator ( on );
+}
+
+/*
 ===============================================================================
 
 	States 
@@ -184,6 +212,7 @@ CLASS_STATES_DECLARATION ( rvWeaponM4A1 )
 	STATE ( "Reload",			rvWeaponM4A1::State_Reload )
 	STATE ( "Flashlight",		rvWeaponM4A1::State_Flashlight )
 	STATE ( "Suppressor",		rvWeaponM4A1::State_Suppressor )
+	STATE ( "Compensator",		rvWeaponM4A1::State_Compensator )
 END_CLASS_STATES
 
 /*
@@ -215,7 +244,10 @@ stateResult_t rvWeaponM4A1::State_Idle( const stateParms_t& parms ) {
 			if ( UpdateFlashlight ( ) ) {
 				return SRESULT_DONE;
 			}
-			if (UpdateSuppressor()) {
+			if ( UpdateSuppressor ( ) ) {
+				return SRESULT_DONE;
+			}
+			if ( UpdateCompensator ( ) ) {
 				return SRESULT_DONE;
 			}
 
@@ -285,6 +317,9 @@ stateResult_t rvWeaponM4A1::State_Fire ( const stateParms_t& parms ) {
 				return SRESULT_DONE;
 			}
 			if ( UpdateSuppressor ( ) ) {
+				return SRESULT_DONE;
+			}
+			if ( UpdateCompensator ( ) ) {
 				return SRESULT_DONE;
 			}
 			return SRESULT_WAIT;
@@ -391,6 +426,42 @@ stateResult_t rvWeaponM4A1::State_Suppressor(const stateParms_t& parms) {
 		}
 		else {
 			Suppressor(true);
+		}
+
+		SetState("Idle", 4);
+		return SRESULT_DONE;
+	}
+	return SRESULT_ERROR;
+}
+
+/*
+================
+rvWeaponM4A1::State_Compensator
+================
+*/
+stateResult_t rvWeaponM4A1::State_Compensator(const stateParms_t& parms) {
+	enum {
+		COMPENSATOR_INIT,
+		COMPENSATOR_WAIT,
+	};
+
+	switch (parms.stage) {
+	case COMPENSATOR_INIT:
+		SetStatus(WP_COMPENSATOR);
+		// Wait for the compensator anim to play		
+		PlayAnim(ANIMCHANNEL_ALL, "compensator", 0);
+		return SRESULT_STAGE(COMPENSATOR_WAIT);
+
+	case COMPENSATOR_WAIT:
+		if (!AnimDone(ANIMCHANNEL_ALL, 4)) {
+			return SRESULT_WAIT;
+		}
+
+		if (owner->IsCompensatorOn()) {
+			Compensator(false);
+		}
+		else {
+			Compensator(true);
 		}
 
 		SetState("Idle", 4);

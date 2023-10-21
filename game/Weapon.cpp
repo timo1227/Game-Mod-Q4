@@ -1040,6 +1040,7 @@ void rvWeapon::Think ( void ) {
 	wsfl.reload		= false;
 	wsfl.flashlight	= false;
 	wsfl.suppressor = false;
+	wsfl.compensator = false;
 	
 	// deal with the third-person visible world model 
 	// don't show shadows of the world model in first person
@@ -1766,6 +1767,15 @@ rvWeapon::Suppressor
 */
 void rvWeapon::Suppressor( void ) {
 	wsfl.suppressor = true;
+}
+
+/*
+================
+rvWeapon::Compensator
+================
+*/
+void rvWeapon::Compensator( void)  {
+	wsfl.compensator = true;
 }
 
 /*
@@ -2522,14 +2532,17 @@ void rvWeapon::Attack(bool altAttack, int num_attacks, float spread, float fuseO
 	idVec3 muzzleOrigin;
 	idMat3 muzzleAxis;
 
-	bool isSuppressed = owner->IsSuppressorOn();
+	bool isSuppressed  = owner->IsSuppressorOn();
+	bool isCompensator = owner->IsCompensatorOn();
 
 	if ( isSuppressed ) {
 		power -= 0.2f;
-		gameLocal.Printf("Supressed Attack New Power: %f\n", power);
+		gameLocal.Printf("Suppressed: %f\n", power);
 	}
-	else {
-		gameLocal.Printf("Power: %f\n", power);
+
+	if ( isCompensator ) {
+		power += 0.2f;
+		gameLocal.Printf("Comp: %f\n", power);
 	}
 
 	if (!viewModel) {

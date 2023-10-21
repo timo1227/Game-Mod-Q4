@@ -1573,6 +1573,7 @@ void idPlayer::Init( void ) {
 	
 	flashlightOn	  = false;
 	suppressorOn	  = false;
+	compensatorOn	  = false;
 
 	idealLegsYaw = 0.0f;
 	legsYaw = 0.0f;
@@ -8615,6 +8616,11 @@ void idPlayer::PerformImpulse( int impulse ) {
 			break;
 		}
 
+		case IMPULSE_54: {
+			ToggleCompensator();
+			break;
+		}
+
  		case IMPULSE_51: {
  			LastWeapon();
  			break;
@@ -13223,6 +13229,10 @@ void idPlayer::ToggleSuppressor(void) {
 		return;
 	}
 
+	if ( compensatorOn ) {
+		ToggleCompensator ( );
+	}
+
 	int suppressorWeapon = currentWeapon;
 	if (!spawnArgs.GetBool(va("weapon%d_suppressor", suppressorWeapon))) {
 		// TODO: find the first suppressor weapon that has ammo starting at the bottom
@@ -13259,6 +13269,58 @@ void idPlayer::ToggleSuppressor(void) {
 	}
 }
 
+
+/*
+================
+idPlayer::ToggleCompensator
+================
+*/
+void idPlayer::ToggleCompensator( void ) {
+	// Dead players can't use compensators
+	if (health <= 0 || !weaponEnabled) {
+		return;
+	}
+
+	if ( suppressorOn ) {
+		ToggleSuppressor ( );
+	}
+
+	int compensatorWeapon = currentWeapon;
+	if (!spawnArgs.GetBool(va("weapon%d_compensator", compensatorWeapon))) {
+		// TODO: find the first compensator weapon that has ammo starting at the bottom
+		for (compensatorWeapon = MAX_WEAPONS - 1; compensatorWeapon >= 0; compensatorWeapon--) {
+			if (inventory.weapons & (1 << compensatorWeapon)) {
+				const char* weap = spawnArgs.GetString(va("def_weapon%d", compensatorWeapon));
+				int			ammo = inventory.ammo[inventory.AmmoIndexForWeaponClass(weap)];
+
+				if (!ammo) {
+					continue;
+				}
+
+				if (spawnArgs.GetBool(va("weapon%d_compensator", compensatorWeapon))) {
+					break;
+				}
+			}
+		}
+
+		// Couldn't find a weapon with a compensator
+		if (compensatorWeapon < 0) {
+			return;
+		}
+	}
+
+	// If the current weapon isn't the compensator then always force the compensator on
+	if (compensatorWeapon != idealWeapon) {
+		compensatorOn = true;
+		idealWeapon = compensatorWeapon;
+		// Inform the weapon to toggle the compensator, this will eventually cause the player's
+		// Compensator method to be called 
+	}
+	else if (weapon) {
+		weapon->Compensator();
+	}
+}
+
 /*
 ================
 idPlayer::Flashlight
@@ -13275,6 +13337,15 @@ idPlayer::Suppressor
 */
 void idPlayer::Suppressor ( bool on ) {
 	suppressorOn = on;
+}
+
+/*
+================
+idPlayer::Compensator
+================
+*/
+void idPlayer::Compensator ( bool on ) {
+	compensatorOn = on;
 }
 
 /*
