@@ -629,9 +629,11 @@ public:
 	void					Flashlight					( bool on );
 	void					Suppressor					( bool on );
 	void					Compensator					( bool on );
+	void					Barrel						( bool on );
 	void					ToggleFlashlight			( void );
 	void					ToggleSuppressor			( void );
 	void					ToggleCompensator			( void );
+	void					ToggleBarrel				( void );
  	bool					CanShowWeaponViewmodel		( void ) const;
 
 	virtual bool			HandleSingleGuiCommand( idEntity *entityGui, idLexer *src );
@@ -702,6 +704,7 @@ public:
 	bool					IsFlashlightOn	( void );
 	bool					IsSuppressorOn	( void );
 	bool					IsCompensatorOn	( void );
+	bool					IsBarrelOn		( void );
 	virtual bool			IsCrouching		( void ) const;
 	
 	// voice com muting
@@ -885,6 +888,7 @@ private:
 	bool					flashlightOn;
 	bool					suppressorOn;
 	bool					compensatorOn;
+	bool					barrelOn;
 	bool					zoomed;
 
 	bool					reloadModel;
@@ -1319,6 +1323,10 @@ ID_INLINE bool idPlayer::IsSuppressorOn( void ) {
 
 ID_INLINE bool idPlayer::IsCompensatorOn( void ) {
 	return compensatorOn;
+}
+
+ID_INLINE bool idPlayer::IsBarrelOn(void) {
+	return barrelOn;
 }
 
 ID_INLINE rvViewWeapon* idPlayer::GetWeaponViewModel( void ) const {

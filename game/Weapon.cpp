@@ -1040,7 +1040,8 @@ void rvWeapon::Think ( void ) {
 	wsfl.reload		= false;
 	wsfl.flashlight	= false;
 	wsfl.suppressor = false;
-	wsfl.compensator = false;
+	wsfl.compensator= false;
+	wsfl.barrel		= false;
 	
 	// deal with the third-person visible world model 
 	// don't show shadows of the world model in first person
@@ -1777,6 +1778,16 @@ rvWeapon::Compensator
 void rvWeapon::Compensator( void)  {
 	wsfl.compensator = true;
 }
+
+/*
+================
+rvWeapon::Barrel
+================
+*/
+void rvWeapon::Barrel(void) {
+	wsfl.barrel = true;
+}
+
 
 /*
 ================
@@ -2534,6 +2545,7 @@ void rvWeapon::Attack(bool altAttack, int num_attacks, float spread, float fuseO
 
 	bool isSuppressed  = owner->IsSuppressorOn();
 	bool isCompensator = owner->IsCompensatorOn();
+	bool isBarrel	   = owner->IsBarrelOn();
 
 	if ( isSuppressed ) {
 		power -= 0.2f;
@@ -2543,6 +2555,11 @@ void rvWeapon::Attack(bool altAttack, int num_attacks, float spread, float fuseO
 	if ( isCompensator ) {
 		power += 0.2f;
 		gameLocal.Printf("Comp: %f\n", power);
+	}
+
+	if ( isBarrel ) {
+		power += 0.1f;
+		gameLocal.Printf("Extended Barrel: %f\n", power);
 	}
 
 	if (!viewModel) {

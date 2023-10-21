@@ -32,6 +32,9 @@ protected:
 	bool				UpdateCompensator	( void );
 	void				Compensator			( bool on );
 
+	bool				UpdateBarrel		( void );
+	void				Barrel				( bool on );
+
 private:
 
 	stateResult_t		State_Idle			( const stateParms_t& parms );
@@ -40,6 +43,7 @@ private:
 	stateResult_t		State_Flashlight	( const stateParms_t& parms );
 	stateResult_t		State_Suppressor	( const stateParms_t& parms );
 	stateResult_t		State_Compensator	( const stateParms_t& parms );
+	stateResult_t		State_Barrel		( const stateParms_t& parms );
 
 	CLASS_STATES_PROTOTYPE ( rvWeaponM4A1 );
 };
@@ -69,6 +73,7 @@ void rvWeaponM4A1::Spawn ( void ) {
 	Flashlight ( owner->IsFlashlightOn() );
 	Suppressor ( owner->IsSuppressorOn() );
 	Compensator( owner->IsCompensatorOn() );
+	Barrel	   ( owner->IsBarrelOn() );
 }
 
 /*
@@ -199,6 +204,29 @@ void rvWeaponM4A1::Compensator( bool on ) {
 }
 
 /*
+================
+rvWeaponM4A1::UpdateBarrel
+================
+*/
+bool rvWeaponM4A1::UpdateBarrel(void) {
+	if (!wsfl.barrel) {
+		return false;
+	}
+
+	SetState( "Barrel", 0 );
+	return true;
+}
+
+/*
+================
+rvWeaponM4A1::Barrel
+================
+*/
+void rvWeaponM4A1::Barrel(bool on) {
+	owner->Barrel( on );
+}
+
+/*
 ===============================================================================
 
 	States 
@@ -213,6 +241,7 @@ CLASS_STATES_DECLARATION ( rvWeaponM4A1 )
 	STATE ( "Flashlight",		rvWeaponM4A1::State_Flashlight )
 	STATE ( "Suppressor",		rvWeaponM4A1::State_Suppressor )
 	STATE ( "Compensator",		rvWeaponM4A1::State_Compensator )
+	STATE ( "Barrel",			rvWeaponM4A1::State_Barrel )
 END_CLASS_STATES
 
 /*
@@ -248,6 +277,9 @@ stateResult_t rvWeaponM4A1::State_Idle( const stateParms_t& parms ) {
 				return SRESULT_DONE;
 			}
 			if ( UpdateCompensator ( ) ) {
+				return SRESULT_DONE;
+			}
+			if ( UpdateBarrel ( ) ) {
 				return SRESULT_DONE;
 			}
 
@@ -320,6 +352,9 @@ stateResult_t rvWeaponM4A1::State_Fire ( const stateParms_t& parms ) {
 				return SRESULT_DONE;
 			}
 			if ( UpdateCompensator ( ) ) {
+				return SRESULT_DONE;
+			}
+			if ( UpdateBarrel ( ) ) {
 				return SRESULT_DONE;
 			}
 			return SRESULT_WAIT;
@@ -462,6 +497,42 @@ stateResult_t rvWeaponM4A1::State_Compensator(const stateParms_t& parms) {
 		}
 		else {
 			Compensator(true);
+		}
+
+		SetState("Idle", 4);
+		return SRESULT_DONE;
+	}
+	return SRESULT_ERROR;
+}
+
+/*
+================
+rvWeaponM4A1::State_Barrel
+================
+*/
+stateResult_t rvWeaponM4A1::State_Barrel(const stateParms_t& parms) {
+	enum {
+		BARREL_INIT,
+		BARREL_WAIT,
+	};
+
+	switch (parms.stage) {
+	case BARREL_INIT:
+		SetStatus(WP_BARREL);
+		// Wait for the barrel anim to play		
+		PlayAnim(ANIMCHANNEL_ALL, "barrel", 0);
+		return SRESULT_STAGE(BARREL_WAIT);
+
+	case BARREL_WAIT:
+		if (!AnimDone(ANIMCHANNEL_ALL, 4)) {
+			return SRESULT_WAIT;
+		}
+
+		if (owner->IsBarrelOn()) {
+			Barrel(false);
+		}
+		else {
+			Barrel(true);
 		}
 
 		SetState("Idle", 4);

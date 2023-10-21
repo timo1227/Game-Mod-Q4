@@ -24,6 +24,7 @@ typedef enum {
 	WP_FLASHLIGHT,
 	WP_SUPPRESSOR,
 	WP_COMPENSATOR,
+	WP_BARREL,
 } weaponStatus_t;
 
 static const int MAX_WEAPONMODS	= 4;
@@ -177,6 +178,8 @@ public:
 	void				Suppressor					( void );
 	void				SetCompensator				( bool on = true );
 	void				Compensator					( void );
+	void				SetBarrel					( bool on = true );
+	void				Barrel						( void );
 	void				SetPushVelocity				( const idVec3 &pushVelocity );
 	void				Reload						( void );
 	void				OwnerDied					( void );
@@ -289,6 +292,7 @@ public:
 		bool		flashlight			:1;
 		bool		suppressor			:1;
 		bool		compensator			:1;
+		bool		barrel				:1;
 		bool		zoom				:1;
 	} wsfl;		
 	

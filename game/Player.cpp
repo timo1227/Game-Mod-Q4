@@ -1574,6 +1574,7 @@ void idPlayer::Init( void ) {
 	flashlightOn	  = false;
 	suppressorOn	  = false;
 	compensatorOn	  = false;
+	barrelOn		  = false;
 
 	idealLegsYaw = 0.0f;
 	legsYaw = 0.0f;
@@ -8621,6 +8622,11 @@ void idPlayer::PerformImpulse( int impulse ) {
 			break;
 		}
 
+		case IMPULSE_55: {
+			ToggleBarrel();
+			break;
+		}
+
  		case IMPULSE_51: {
  			LastWeapon();
  			break;
@@ -8789,6 +8795,10 @@ void idPlayer::AdjustSpeed(void) {
 	speed *= PowerUpModifier(PMOD_SPEED);
 
 	speed *= injurySpeedMultiplier;
+
+	if ( IsBarrelOn ( ) ) {
+		speed *= .95f;	//With Extended Barrel Mod player is slower. 95% of orignal speed. 
+	}
 
 	if (influenceActive == INFLUENCE_LEVEL3) {
 		speed *= 0.33f;
@@ -13323,6 +13333,54 @@ void idPlayer::ToggleCompensator( void ) {
 
 /*
 ================
+idPlayer::ToggleBarrel
+================
+*/
+void idPlayer::ToggleBarrel(void) {
+	// Dead players can't use barrels
+	if (health <= 0 || !weaponEnabled) {
+		return;
+	}
+
+	int barrelWeapon = currentWeapon;
+	if (!spawnArgs.GetBool(va("weapon%d_barrel", barrelWeapon))) {
+		// TODO: find the first barrel weapon that has ammo starting at the bottom
+		for (barrelWeapon = MAX_WEAPONS - 1; barrelWeapon >= 0; barrelWeapon--) {
+			if (inventory.weapons & (1 << barrelWeapon)) {
+				const char* weap = spawnArgs.GetString(va("def_weapon%d", barrelWeapon));
+				int			ammo = inventory.ammo[inventory.AmmoIndexForWeaponClass(weap)];
+
+				if (!ammo) {
+					continue;
+				}
+
+				if (spawnArgs.GetBool(va("weapon%d_barrel", barrelWeapon))) {
+					break;
+				}
+			}
+		}
+
+		// Couldn't find a weapon with a barrel
+		if (barrelWeapon < 0) {
+			return;
+		}
+	}
+
+	// If the current weapon isn't the barrel then always force the barrel on
+	if (barrelWeapon != idealWeapon) {
+		barrelOn = true;
+		AdjustSpeed();
+		idealWeapon = barrelWeapon;
+		// Inform the weapon to toggle the barrel, this will eventually cause the player's
+		// Barrel method to be called 
+	}
+	else if (weapon) {
+		weapon->Barrel();
+	}
+}
+
+/*
+================
 idPlayer::Flashlight
 ================
 */
@@ -13346,6 +13404,15 @@ idPlayer::Compensator
 */
 void idPlayer::Compensator ( bool on ) {
 	compensatorOn = on;
+}
+
+/*
+================
+idPlayer::Barrel
+================
+*/
+void idPlayer::Barrel( bool on ) {
+	barrelOn = on;
 }
 
 /*
