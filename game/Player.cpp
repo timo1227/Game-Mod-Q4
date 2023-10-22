@@ -1572,6 +1572,9 @@ void idPlayer::Init( void ) {
 	previousWeapon = -1;
 	
 	flashlightOn	  = false;
+	suppressorOn	  = false;
+	compensatorOn	  = false;
+	barrelOn		  = false;
 
 	idealLegsYaw = 0.0f;
 	legsYaw = 0.0f;
@@ -8609,6 +8612,21 @@ void idPlayer::PerformImpulse( int impulse ) {
 			break;
 		}
 
+		case IMPULSE_53: {
+			ToggleSuppressor();
+			break;
+		}
+
+		case IMPULSE_54: {
+			ToggleCompensator();
+			break;
+		}
+
+		case IMPULSE_55: {
+			ToggleBarrel();
+			break;
+		}
+
  		case IMPULSE_51: {
  			LastWeapon();
  			break;
@@ -8777,6 +8795,10 @@ void idPlayer::AdjustSpeed(void) {
 	speed *= PowerUpModifier(PMOD_SPEED);
 
 	speed *= injurySpeedMultiplier;
+
+	if ( IsBarrelOn ( ) ) {
+		speed *= .95f;	//With Extended Barrel Mod player is slower. 95% of orignal speed. 
+	}
 
 	if (influenceActive == INFLUENCE_LEVEL3) {
 		speed *= 0.33f;
@@ -13208,11 +13230,189 @@ void idPlayer::ToggleFlashlight ( void ) {
 
 /*
 ================
+idPlayer::ToggleSuppressor
+================
+*/
+void idPlayer::ToggleSuppressor(void) {
+	// Dead players can't use suppressors
+	if (health <= 0 || !weaponEnabled) {
+		return;
+	}
+
+	if ( compensatorOn ) {
+		ToggleCompensator ( );
+	}
+
+	int suppressorWeapon = currentWeapon;
+	if (!spawnArgs.GetBool(va("weapon%d_suppressor", suppressorWeapon))) {
+		// TODO: find the first suppressor weapon that has ammo starting at the bottom
+		for (suppressorWeapon = MAX_WEAPONS - 1; suppressorWeapon >= 0; suppressorWeapon--) {
+			if (inventory.weapons & (1 << suppressorWeapon)) {
+				const char* weap = spawnArgs.GetString(va("def_weapon%d", suppressorWeapon));
+				int			ammo = inventory.ammo[inventory.AmmoIndexForWeaponClass(weap)];
+
+				if (!ammo) {
+					continue;
+				}
+
+				if (spawnArgs.GetBool(va("weapon%d_suppressor", suppressorWeapon))) {
+					break;
+				}
+			}
+		}
+
+		// Couldn't find a weapon with a suppressor
+		if (suppressorWeapon < 0) {
+			return;
+		}
+	}
+
+	// If the current weapon isn't the suppressor then always force the suppressor on
+	if (suppressorWeapon != idealWeapon) {
+		suppressorOn = true;
+		idealWeapon = suppressorWeapon;
+		// Inform the weapon to toggle the suppressor, this will eventually cause the player's
+		// Suppressor method to be called 
+	}
+	else if (weapon) {
+		weapon->Suppressor( );
+	}
+}
+
+
+/*
+================
+idPlayer::ToggleCompensator
+================
+*/
+void idPlayer::ToggleCompensator( void ) {
+	// Dead players can't use compensators
+	if (health <= 0 || !weaponEnabled) {
+		return;
+	}
+
+	if ( suppressorOn ) {
+		ToggleSuppressor ( );
+	}
+
+	int compensatorWeapon = currentWeapon;
+	if (!spawnArgs.GetBool(va("weapon%d_compensator", compensatorWeapon))) {
+		// TODO: find the first compensator weapon that has ammo starting at the bottom
+		for (compensatorWeapon = MAX_WEAPONS - 1; compensatorWeapon >= 0; compensatorWeapon--) {
+			if (inventory.weapons & (1 << compensatorWeapon)) {
+				const char* weap = spawnArgs.GetString(va("def_weapon%d", compensatorWeapon));
+				int			ammo = inventory.ammo[inventory.AmmoIndexForWeaponClass(weap)];
+
+				if (!ammo) {
+					continue;
+				}
+
+				if (spawnArgs.GetBool(va("weapon%d_compensator", compensatorWeapon))) {
+					break;
+				}
+			}
+		}
+
+		// Couldn't find a weapon with a compensator
+		if (compensatorWeapon < 0) {
+			return;
+		}
+	}
+
+	// If the current weapon isn't the compensator then always force the compensator on
+	if (compensatorWeapon != idealWeapon) {
+		compensatorOn = true;
+		idealWeapon = compensatorWeapon;
+		// Inform the weapon to toggle the compensator, this will eventually cause the player's
+		// Compensator method to be called 
+	}
+	else if (weapon) {
+		weapon->Compensator();
+	}
+}
+
+/*
+================
+idPlayer::ToggleBarrel
+================
+*/
+void idPlayer::ToggleBarrel(void) {
+	// Dead players can't use barrels
+	if (health <= 0 || !weaponEnabled) {
+		return;
+	}
+
+	int barrelWeapon = currentWeapon;
+	if (!spawnArgs.GetBool(va("weapon%d_barrel", barrelWeapon))) {
+		// TODO: find the first barrel weapon that has ammo starting at the bottom
+		for (barrelWeapon = MAX_WEAPONS - 1; barrelWeapon >= 0; barrelWeapon--) {
+			if (inventory.weapons & (1 << barrelWeapon)) {
+				const char* weap = spawnArgs.GetString(va("def_weapon%d", barrelWeapon));
+				int			ammo = inventory.ammo[inventory.AmmoIndexForWeaponClass(weap)];
+
+				if (!ammo) {
+					continue;
+				}
+
+				if (spawnArgs.GetBool(va("weapon%d_barrel", barrelWeapon))) {
+					break;
+				}
+			}
+		}
+
+		// Couldn't find a weapon with a barrel
+		if (barrelWeapon < 0) {
+			return;
+		}
+	}
+
+	// If the current weapon isn't the barrel then always force the barrel on
+	if (barrelWeapon != idealWeapon) {
+		barrelOn = true;
+		AdjustSpeed();
+		idealWeapon = barrelWeapon;
+		// Inform the weapon to toggle the barrel, this will eventually cause the player's
+		// Barrel method to be called 
+	}
+	else if (weapon) {
+		weapon->Barrel();
+	}
+}
+
+/*
+================
 idPlayer::Flashlight
 ================
 */
 void idPlayer::Flashlight ( bool on ) {
 	flashlightOn = on;	
+}
+
+/*
+================
+idPlayer::Suppressor
+================
+*/
+void idPlayer::Suppressor ( bool on ) {
+	suppressorOn = on;
+}
+
+/*
+================
+idPlayer::Compensator
+================
+*/
+void idPlayer::Compensator ( bool on ) {
+	compensatorOn = on;
+}
+
+/*
+================
+idPlayer::Barrel
+================
+*/
+void idPlayer::Barrel( bool on ) {
+	barrelOn = on;
 }
 
 /*

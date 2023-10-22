@@ -22,6 +22,9 @@ typedef enum {
 	WP_RISING,
 	WP_LOWERING,
 	WP_FLASHLIGHT,
+	WP_SUPPRESSOR,
+	WP_COMPENSATOR,
+	WP_BARREL,
 } weaponStatus_t;
 
 static const int MAX_WEAPONMODS	= 4;
@@ -171,6 +174,12 @@ public:
 	void				ShowWorldModel				( void );
 	void				SetFlashlight				( bool on = true );
 	void				Flashlight					( void );
+	void				SetSuppressor				( bool on = true );
+	void				Suppressor					( void );
+	void				SetCompensator				( bool on = true );
+	void				Compensator					( void );
+	void				SetBarrel					( bool on = true );
+	void				Barrel						( void );
 	void				SetPushVelocity				( const idVec3 &pushVelocity );
 	void				Reload						( void );
 	void				OwnerDied					( void );
@@ -265,6 +274,7 @@ public:
 
 	void				UpdateMuzzleFlash			( void );
 	void				UpdateFlashlight			( void );	
+	void				UpdateSuppressor			( void );
 
 	void				UpdateGUI					( void );
 	void				UpdateCrosshairGUI			( idUserInterface* gui ) const;
@@ -280,6 +290,9 @@ public:
 		bool		raiseWeapon			:1;
 		bool		lowerWeapon			:1;
 		bool		flashlight			:1;
+		bool		suppressor			:1;
+		bool		compensator			:1;
+		bool		barrel				:1;
 		bool		zoom				:1;
 	} wsfl;		
 	
@@ -393,7 +406,6 @@ public:
 	// General
 	idStr							icon;
 	bool							isStrogg;
-	
 	bool							forceGUIReload;
 
 public:
