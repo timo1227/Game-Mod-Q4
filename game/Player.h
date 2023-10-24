@@ -280,6 +280,27 @@ public:
  		EVENT_MAXEVENTS
  	};
 
+	// Enum for different types of status effects
+	enum class EffectType {
+		HeavyBleed,
+		LightBleed,
+		Fracture,
+		BrokenLimb,
+		Pain
+	};
+
+	enum class FracturedPart {
+		None,
+		Leg,
+		Arm
+	};
+
+	enum class BrokenPart {
+		None,
+		Leg,
+		Arm
+	};
+
 	friend class idThread;
 
 	usercmd_t				usercmd;
@@ -349,6 +370,7 @@ public:
 	bool					showNewObjectives;
 
 	int						lastDmgTime;
+	int						lastBleedTime;
 	int						deathClearContentsTime;
  	bool					doingDeathSkin;
 	int						nextHealthPulse;	// time when health will tick down
@@ -485,6 +507,7 @@ public:
 	void					CalcDamagePoints(  idEntity *inflictor, idEntity *attacker, const idDict *damageDef,
 							   const float damageScale, const int location, int *health, int *armor );
 	virtual	void			Damage( idEntity *inflictor, idEntity *attacker, const idVec3 &dir, const char *damageDefName, const float damageScale, const int location );
+	virtual void			UpdateEffects( void );
 	virtual bool			CanPlayImpactEffect ( idEntity* attacker, idEntity* target );
 	virtual void			AddDamageEffect( const trace_t &collision, const idVec3 &velocity, const char *damageDefName, idEntity* inflictor );
 	virtual void			ProjectHeadOverlay( const idVec3 &point, const idVec3 &dir, float size, const char *decal );
@@ -604,7 +627,13 @@ public:
  	void					WeaponRisingCallback		( void );
 	void					RemoveWeapon				( const char *weap );
 	void					Flashlight					( bool on );
+	void					Suppressor					( bool on );
+	void					Compensator					( bool on );
+	void					Barrel						( bool on );
 	void					ToggleFlashlight			( void );
+	void					ToggleSuppressor			( void );
+	void					ToggleCompensator			( void );
+	void					ToggleBarrel				( void );
  	bool					CanShowWeaponViewmodel		( void ) const;
 
 	virtual bool			HandleSingleGuiCommand( idEntity *entityGui, idLexer *src );
@@ -673,6 +702,9 @@ public:
  	bool					IsInTeleport	( void );
 	bool					IsZoomed		( void );
 	bool					IsFlashlightOn	( void );
+	bool					IsSuppressorOn	( void );
+	bool					IsCompensatorOn	( void );
+	bool					IsBarrelOn		( void );
 	virtual bool			IsCrouching		( void ) const;
 	
 	// voice com muting
@@ -854,6 +886,9 @@ private:
 // RAVEN END
 
 	bool					flashlightOn;
+	bool					suppressorOn;
+	bool					compensatorOn;
+	bool					barrelOn;
 	bool					zoomed;
 
 	bool					reloadModel;
@@ -1154,6 +1189,99 @@ private:
 	stateResult_t			State_Legs_Land					( const stateParms_t& parms );
 	stateResult_t			State_Legs_Dead					( const stateParms_t& parms );
 	
+	private: 
+		class StatusEffect {
+		public:
+			float duration;          // How long this status effect lasts
+			float endTime;			 // End time of the effect
+			int lastApplyTime;       // Last time an effect was applied
+
+			virtual void ApplyEffect(idPlayer* player) = 0; // Pure virtual function to apply specific effect
+			virtual EffectType GetType() const = 0;         // Returns the effect type
+		};
+
+		class BleedEffect : public StatusEffect {
+		public:
+			bool isHeavyBleed;       // Differentiates between heavy and light bleed
+			float damageAccumulator; // Accumulates damage
+
+			virtual void ApplyEffect(idPlayer* player) override;  // Specific implementation for bleed effect
+			virtual EffectType GetType() const override {
+				return isHeavyBleed ? EffectType::HeavyBleed : EffectType::LightBleed;
+			}
+		};
+
+		class FractureEffect : public StatusEffect {
+		private:
+			FracturedPart fracturedPart;
+
+		public:
+			FractureEffect(FracturedPart part) : fracturedPart(part) {}
+
+			virtual void ApplyEffect(idPlayer* player) override;
+
+			virtual void EndEffect(idPlayer* player);
+
+			FracturedPart GetFracturedPart() const {
+				return fracturedPart;
+			}
+
+			virtual EffectType GetType() const override {
+				return EffectType::Fracture;
+			}
+		};
+
+		class BrokenEffect : public StatusEffect {
+		private:
+			BrokenPart brokenPart;
+
+		public:
+			idEntity* inflictor;
+			idEntity* attacker;
+			int damage;
+			idVec3 dir;
+			int location;
+
+			BrokenEffect(BrokenPart part) : brokenPart(part) {}
+
+			virtual void ApplyEffect(idPlayer* player) override;
+
+			virtual void EndEffect(idPlayer* player);
+
+			BrokenPart GetBrokenPart() const {
+				return brokenPart;
+			}
+
+			virtual EffectType GetType() const override {
+				return EffectType::BrokenLimb;
+			}
+		};
+
+		class EffectsManager {
+		private:
+			idPlayer* owner;  // Pointer to the enclosing idPlayer instance
+			idList<StatusEffect*> activeEffects; // Store pointers to active effects
+
+		public:
+			EffectsManager(idPlayer* ownerPtr) : owner(ownerPtr) {}  // Constructor to set the owner
+			void AddEffect(StatusEffect* effect);
+			void RemoveEffect(EffectType type);
+
+			StatusEffect* idPlayer::EffectsManager::GetStatusEffect(EffectType type) {
+				for (int i = 0; i < activeEffects.Num(); ++i) {
+					if (activeEffects[i]->GetType() == type) {
+						return activeEffects[i];
+					}
+				}
+				return nullptr;  // Return null if the effect is not found
+			};
+
+			bool HasStatusEffect(EffectType type);
+			void UpdateEffects();									 // Calls ApplyEffect() for each active effect
+		};
+
+		EffectsManager effectsManager;
+	
  	CLASS_STATES_PROTOTYPE( idPlayer );
 };
 
@@ -1187,6 +1315,18 @@ ID_INLINE bool idPlayer::IsZoomed( void ) {
 
 ID_INLINE bool idPlayer::IsFlashlightOn( void ) {
 	return flashlightOn;
+}
+
+ID_INLINE bool idPlayer::IsSuppressorOn( void ) {
+	return suppressorOn;
+}
+
+ID_INLINE bool idPlayer::IsCompensatorOn( void ) {
+	return compensatorOn;
+}
+
+ID_INLINE bool idPlayer::IsBarrelOn(void) {
+	return barrelOn;
 }
 
 ID_INLINE rvViewWeapon* idPlayer::GetWeaponViewModel( void ) const {

@@ -1036,9 +1036,12 @@ void rvWeapon::Think ( void ) {
 		viewModel->UpdateAnimation( );
 	}
 
-	// Clear reload and flashlight flags
+	// Clear flags
 	wsfl.reload		= false;
 	wsfl.flashlight	= false;
+	wsfl.suppressor = false;
+	wsfl.compensator= false;
+	wsfl.barrel		= false;
 	
 	// deal with the third-person visible world model 
 	// don't show shadows of the world model in first person
@@ -1760,6 +1763,34 @@ void rvWeapon::Flashlight ( void ) {
 
 /*
 ================
+rvWeapon::Suppressor
+================
+*/
+void rvWeapon::Suppressor( void ) {
+	wsfl.suppressor = true;
+}
+
+/*
+================
+rvWeapon::Compensator
+================
+*/
+void rvWeapon::Compensator( void)  {
+	wsfl.compensator = true;
+}
+
+/*
+================
+rvWeapon::Barrel
+================
+*/
+void rvWeapon::Barrel(void) {
+	wsfl.barrel = true;
+}
+
+
+/*
+================
 rvWeapon::SetPushVelocity
 ================
 */
@@ -2089,33 +2120,39 @@ void rvWeapon::UpdateFlashlight ( void ) {
 rvWeapon::MuzzleFlash
 ================
 */
-void rvWeapon::MuzzleFlash ( void ) {
-	renderLight_t& light	  = lights[WPLIGHT_MUZZLEFLASH];
+void rvWeapon::MuzzleFlash(void) {
+	renderLight_t& light = lights[WPLIGHT_MUZZLEFLASH];
 	renderLight_t& lightWorld = lights[WPLIGHT_MUZZLEFLASH_WORLD];
 
-	if ( !g_muzzleFlash.GetBool() || flashJointView == INVALID_JOINT || !light.lightRadius[0] ) {
+	if (!g_muzzleFlash.GetBool() || flashJointView == INVALID_JOINT || !light.lightRadius[0]) {
 		return;
 	}
-	if ( g_perfTest_weaponNoFX.GetBool() ) {
+	if (g_perfTest_weaponNoFX.GetBool()) {
 		return;
 	}
 
-	if ( viewModel ) {
+	// Suppress the muzzle flash if the suppressor is active
+	if (owner->IsSuppressorOn()) {
+		return;
+	}
+
+	if (viewModel) {
 		// these will be different each fire
-		light.shaderParms[ SHADERPARM_TIMEOFFSET ]	= -MS2SEC( gameLocal.time );
-		light.shaderParms[ SHADERPARM_DIVERSITY ]	= viewModel->GetRenderEntity()->shaderParms[ SHADERPARM_DIVERSITY ];
+		light.shaderParms[SHADERPARM_TIMEOFFSET] = -MS2SEC(gameLocal.time);
+		light.shaderParms[SHADERPARM_DIVERSITY] = viewModel->GetRenderEntity()->shaderParms[SHADERPARM_DIVERSITY];
 		light.noShadows = true;
 
-		lightWorld.shaderParms[ SHADERPARM_TIMEOFFSET ]	= -MS2SEC( gameLocal.time );
-		lightWorld.shaderParms[ SHADERPARM_DIVERSITY ]	= viewModel->GetRenderEntity()->shaderParms[ SHADERPARM_DIVERSITY ];
+		lightWorld.shaderParms[SHADERPARM_TIMEOFFSET] = -MS2SEC(gameLocal.time);
+		lightWorld.shaderParms[SHADERPARM_DIVERSITY] = viewModel->GetRenderEntity()->shaderParms[SHADERPARM_DIVERSITY];
 		lightWorld.noShadows = true;
 
 		// the light will be removed at this time
 		muzzleFlashEnd = gameLocal.time + muzzleFlashTime;
-	} else {
-		common->Warning( "NULL viewmodel %s\n", __FUNCTION__ );
 	}
-	UpdateMuzzleFlash ( );
+	else {
+		common->Warning("NULL viewmodel %s\n", __FUNCTION__);
+	}
+	UpdateMuzzleFlash();
 }
 
 
@@ -2502,71 +2539,93 @@ void rvWeapon::AddToClip ( int amount ) {
 rvWeapon::Attack
 ================
 */
-void rvWeapon::Attack( bool altAttack, int num_attacks, float spread, float fuseOffset, float power ) {
+void rvWeapon::Attack(bool altAttack, int num_attacks, float spread, float fuseOffset, float power) {
 	idVec3 muzzleOrigin;
 	idMat3 muzzleAxis;
-	
-	if ( !viewModel ) {
-		common->Warning( "NULL viewmodel %s\n", __FUNCTION__ );
+
+	bool isSuppressed  = owner->IsSuppressorOn();
+	bool isCompensator = owner->IsCompensatorOn();
+	bool isBarrel	   = owner->IsBarrelOn();
+
+	if ( isSuppressed ) {
+		power -= 0.2f;
+		gameLocal.Printf("Suppressed: %f\n", power);
+	}
+
+	if ( isCompensator ) {
+		power += 0.2f;
+		gameLocal.Printf("Comp: %f\n", power);
+	}
+
+	if ( isBarrel ) {
+		power += 0.1f;
+		gameLocal.Printf("Extended Barrel: %f\n", power);
+	}
+
+	if (!viewModel) {
+		common->Warning("NULL viewmodel %s\n", __FUNCTION__);
 		return;
 	}
-	
-	if ( viewModel->IsHidden() ) {
+
+	if (viewModel->IsHidden()) {
 		return;
 	}
 
 	// avoid all ammo considerations on an MP client
-	if ( !gameLocal.isClient ) {
+	if (!gameLocal.isClient) {
 		// check if we're out of ammo or the clip is empty
-		int ammoAvail = owner->inventory.HasAmmo( ammoType, ammoRequired );
-		if ( !ammoAvail || ( ( clipSize != 0 ) && ( ammoClip <= 0 ) ) ) {
+		int ammoAvail = owner->inventory.HasAmmo(ammoType, ammoRequired);
+		if (!ammoAvail || ((clipSize != 0) && (ammoClip <= 0))) {
 			return;
 		}
 
-		owner->inventory.UseAmmo( ammoType, ammoRequired );
-		if ( clipSize && ammoRequired ) {
- 			clipPredictTime = gameLocal.time;	// mp client: we predict this. mark time so we're not confused by snapshots
+		owner->inventory.UseAmmo(ammoType, ammoRequired);
+		if (clipSize && ammoRequired) {
+			clipPredictTime = gameLocal.time;	// mp client: we predict this. mark time so we're not confused by snapshots
 			ammoClip -= 1;
 		}
 
 		// wake up nearby monsters
-		if ( !wfl.silent_fire ) {
-			gameLocal.AlertAI( owner );
+		if (!wfl.silent_fire || !isSuppressed) {
+			gameLocal.AlertAI(owner);
 		}
 	}
 
 	// set the shader parm to the time of last projectile firing,
 	// which the gun material shaders can reference for single shot barrel glows, etc
-	viewModel->SetShaderParm ( SHADERPARM_DIVERSITY, gameLocal.random.CRandomFloat() );
-	viewModel->SetShaderParm ( SHADERPARM_TIMEOFFSET, -MS2SEC( gameLocal.realClientTime ) );
+	viewModel->SetShaderParm(SHADERPARM_DIVERSITY, gameLocal.random.CRandomFloat());
+	viewModel->SetShaderParm(SHADERPARM_TIMEOFFSET, -MS2SEC(gameLocal.realClientTime));
 
-	if ( worldModel.GetEntity() ) {
-		worldModel->SetShaderParm( SHADERPARM_DIVERSITY, viewModel->GetRenderEntity()->shaderParms[ SHADERPARM_DIVERSITY ] );
-		worldModel->SetShaderParm( SHADERPARM_TIMEOFFSET, viewModel->GetRenderEntity()->shaderParms[ SHADERPARM_TIMEOFFSET ] );
+	if (worldModel.GetEntity()) {
+		worldModel->SetShaderParm(SHADERPARM_DIVERSITY, viewModel->GetRenderEntity()->shaderParms[SHADERPARM_DIVERSITY]);
+		worldModel->SetShaderParm(SHADERPARM_TIMEOFFSET, viewModel->GetRenderEntity()->shaderParms[SHADERPARM_TIMEOFFSET]);
 	}
 
 	// calculate the muzzle position
-	if ( barrelJointView != INVALID_JOINT && spawnArgs.GetBool( "launchFromBarrel" ) ) {
+	if (barrelJointView != INVALID_JOINT && spawnArgs.GetBool("launchFromBarrel")) {
 		// there is an explicit joint for the muzzle
-		GetGlobalJointTransform( true, barrelJointView, muzzleOrigin, muzzleAxis );
-	} else {
+		GetGlobalJointTransform(true, barrelJointView, muzzleOrigin, muzzleAxis);
+	}
+	else {
 		// go straight out of the view
 		muzzleOrigin = playerViewOrigin;
-		muzzleAxis = playerViewAxis;		
+		muzzleAxis = playerViewAxis;
 		muzzleOrigin += playerViewAxis[0] * muzzleOffset;
 	}
 
 	// add some to the kick time, incrementally moving repeat firing weapons back
-	if ( kick_endtime < gameLocal.realClientTime ) {
+	if (kick_endtime < gameLocal.realClientTime) {
 		kick_endtime = gameLocal.realClientTime;
 	}
 	kick_endtime += muzzle_kick_time;
-	if ( kick_endtime > gameLocal.realClientTime + muzzle_kick_maxtime ) {
+	if (kick_endtime > gameLocal.realClientTime + muzzle_kick_maxtime) {
 		kick_endtime = gameLocal.realClientTime + muzzle_kick_maxtime;
 	}
 
-	// add the muzzleflash
-	MuzzleFlash();
+	if (!isSuppressed){
+		// add the muzzleflash
+		MuzzleFlash();
+	}
 
 	// quad damage overlays a sound
 	if ( owner->PowerUpActive( POWERUP_QUADDAMAGE ) ) {
@@ -2575,9 +2634,11 @@ void rvWeapon::Attack( bool altAttack, int num_attacks, float spread, float fuse
 
 	// Muzzle flash effect
 	bool muzzleTint = spawnArgs.GetBool( "muzzleTint" );
-	viewModel->PlayEffect( "fx_muzzleflash", flashJointView, false, vec3_origin, false, EC_IGNORE, muzzleTint ? owner->GetHitscanTint() : vec4_one );
+	if (!isSuppressed) {
+		viewModel->PlayEffect("fx_muzzleflash", flashJointView, false, vec3_origin, false, EC_IGNORE, muzzleTint ? owner->GetHitscanTint() : vec4_one);
+	}
 
-	if ( worldModel && flashJointWorld != INVALID_JOINT ) {
+	if ( worldModel && flashJointWorld != INVALID_JOINT && !isSuppressed ) {
 		worldModel->PlayEffect( gameLocal.GetEffect( weaponDef->dict, "fx_muzzleflash_world" ), flashJointWorld, vec3_origin, mat3_identity, false, vec3_origin, false, EC_IGNORE, muzzleTint ? owner->GetHitscanTint() : vec4_one );
 	}
 
@@ -3127,12 +3188,19 @@ bool rvWeapon::AnimDone( int channel, int blendFrames ) {
 rvWeapon::StartSound
 ===============
 */
-bool rvWeapon::StartSound ( const char *soundName, const s_channelType channel, int soundShaderFlags, bool broadcast, int *length ) {
-	if ( !viewModel ) {
-		common->Warning( "NULL viewmodel %s\n", __FUNCTION__ );
+bool rvWeapon::StartSound(const char* soundName, const s_channelType channel, int soundShaderFlags, bool broadcast, int* length) {
+	if (!viewModel) {
+		common->Warning("NULL viewmodel %s\n", __FUNCTION__);
 		return false;
 	}
-	return viewModel->StartSound( soundName, channel, soundShaderFlags, broadcast, length );
+
+	// Do not play the sound if the suppressor is on
+	if (owner->IsSuppressorOn()) {
+		gameLocal.Printf("Sillent Sound shh...\n");
+		return false;
+	}
+
+	return viewModel->StartSound(soundName, channel, soundShaderFlags, broadcast, length);
 }
 
 /*
