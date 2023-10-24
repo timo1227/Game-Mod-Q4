@@ -8613,11 +8613,17 @@ void idPlayer::PerformImpulse( int impulse ) {
 		}
 
 		case IMPULSE_53: {
+			if ( compensatorOn ) {
+				ToggleCompensator();
+			}
 			ToggleSuppressor();
 			break;
 		}
 
 		case IMPULSE_54: {
+			if ( suppressorOn ) {
+				ToggleSuppressor();
+			}
 			ToggleCompensator();
 			break;
 		}
@@ -13235,12 +13241,8 @@ idPlayer::ToggleSuppressor
 */
 void idPlayer::ToggleSuppressor(void) {
 	// Dead players can't use suppressors
-	if (health <= 0 || !weaponEnabled) {
+	if (health <= 0 || !weaponEnabled || compensatorOn) {
 		return;
-	}
-
-	if ( compensatorOn ) {
-		ToggleCompensator ( );
 	}
 
 	int suppressorWeapon = currentWeapon;
@@ -13287,12 +13289,8 @@ idPlayer::ToggleCompensator
 */
 void idPlayer::ToggleCompensator( void ) {
 	// Dead players can't use compensators
-	if (health <= 0 || !weaponEnabled) {
+	if (health <= 0 || !weaponEnabled || suppressorOn) {
 		return;
-	}
-
-	if ( suppressorOn ) {
-		ToggleSuppressor ( );
 	}
 
 	int compensatorWeapon = currentWeapon;
